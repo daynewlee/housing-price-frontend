@@ -1,14 +1,34 @@
 import { z } from "zod";
 
+// Helper for numeric inputs that converts empty string to NaN/undefined for clean error messages
+const numericField = (label: string, min = 0, max?: number) => {
+  let rule = z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : Number(val)),
+    z.number({ invalid_type_error: `${label} is required and must be a number` })
+  );
+
+  if (min > 0) {
+    rule = rule.refine((v) => v >= min, { message: `${label} must be at least ${min}` });
+  } else {
+    rule = rule.refine((v) => v >= 0, { message: `${label} cannot be negative` });
+  }
+
+  if (max !== undefined) {
+    rule = rule.refine((v) => v <= max, { message: `${label} cannot exceed ${max}` });
+  }
+
+  return rule;
+};
+
 export const propertyFormSchema = z.object({
-  property_name: z.string().min(1, "Property name is required").default("Sample Property"),
-  square_footage: z.coerce.number().positive("Square footage must be > 0"),
-  bedrooms: z.coerce.number().int().min(0, "Bedrooms cannot be negative"),
-  bathrooms: z.coerce.number().min(0, "Bathrooms cannot be negative"),
-  year_built: z.coerce.number().int().min(1801, "Year must be > 1800").max(2026, "Year cannot be in the future"),
-  lot_size: z.coerce.number().positive("Lot size must be > 0"),
-  distance_to_city_center: z.coerce.number().min(0, "Distance cannot be negative"),
-  school_rating: z.coerce.number().min(0, "Min rating is 0").max(10, "Max rating is 10"),
+  property_name: z.string().trim().min(1, "Property name is required"),
+  square_footage: numericField("Square footage", 1),
+  bedrooms: numericField("Bedrooms", 0).refine((v) => Number.isInteger(v), { message: "Bedrooms must be an integer" }),
+  bathrooms: numericField("Bathrooms", 0),
+  year_built: numericField("Year built", 1801, 2026).refine((v) => Number.isInteger(v), { message: "Year must be an integer" }),
+  lot_size: numericField("Lot size", 1),
+  distance_to_city_center: numericField("Distance to city center", 0),
+  school_rating: numericField("School rating", 0, 10),
 });
 
 export type PropertyFormData = z.infer<typeof propertyFormSchema>;
