@@ -19,7 +19,6 @@ export default function EstimateForm({ onSubmit, loading }: EstimateFormProps) {
     formState: { errors },
   } = useForm<PropertyFormData>({
     resolver: zodResolver(propertyFormSchema),
-    mode: "onTouched",
     defaultValues: {
       property_name: "Suburban Family Home",
       square_footage: 1850,
@@ -32,12 +31,14 @@ export default function EstimateForm({ onSubmit, loading }: EstimateFormProps) {
     },
   });
 
-  const onFormSubmit = async (data: PropertyFormData) => {
+  const onValid = async (data: PropertyFormData) => {
     setApiError(null);
     try {
       await onSubmit(data);
-    } catch (err: any) {
-      if (err.message?.includes("503") || err.message?.includes("Failed to fetch")) {
+    } catch (err: unknown) {
+      console.error("API submission error:", err);
+      const msg = err instanceof Error ? err.message : "Service unavailable";
+      if (msg.includes("503") || msg.includes("Failed to fetch")) {
         setApiError("Service unavailable: Backend or ML model is currently unreachable.");
       } else {
         setApiError("Invalid input: Please verify all fields match expected formats.");
@@ -45,24 +46,18 @@ export default function EstimateForm({ onSubmit, loading }: EstimateFormProps) {
     }
   };
 
+  const onInvalid = (formErrors: typeof errors) => {
+    console.warn("Client validation failed:", formErrors);
+    setApiError("Invalid input: Please check the highlighted errors in the form.");
+  };
+
   return (
-    <form
-      onSubmit={handleSubmit(onFormSubmit)}
-      className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4"
-    >
+    <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
       <h2 className="text-lg font-bold text-slate-800 border-b pb-2">Property Details</h2>
 
-      {/* Global Error Banner */}
       {apiError && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md">
           {apiError}
-        </div>
-      )}
-
-      {/* Show error summary if user tries submitting empty fields */}
-      {Object.keys(errors).length > 0 && (
-        <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded">
-          Please correct the highlighted inputs below before proceeding.
         </div>
       )}
 
@@ -152,13 +147,15 @@ export default function EstimateForm({ onSubmit, loading }: EstimateFormProps) {
         {errors.school_rating && <p className="text-xs text-red-500 mt-1">{errors.school_rating.message}</p>}
       </div>
 
+      {/* 改为 type="button"，完全切断原生浏览器的 GET 刷新 */}
       <button
-        type="submit"
+        type="button"
+        onClick={handleSubmit(onValid, onInvalid)}
         disabled={loading}
-        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded transition disabled:bg-blue-300"
+        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded transition disabled:bg-blue-300 cursor-pointer"
       >
         {loading ? "Calculating Valuation..." : "Predict Valuation & Save"}
       </button>
-    </form>
+    </div>
   );
 }
