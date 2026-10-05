@@ -59,7 +59,6 @@ export default function WhatIfLineChart({
       if (prop.trajectory && prop.trajectory[yearIndex]) {
         row[propKey] = prop.trajectory[yearIndex].price;
       } else {
-        // 兜底推演
         const factor = Math.pow(1.0 + inflationRate / 100.0, yearIndex);
         row[propKey] = Math.round(prop.currentPrice * factor);
       }
@@ -126,7 +125,7 @@ export default function WhatIfLineChart({
         </div>
       </div>
 
-      {/* 摘要指标 */}
+      {/* Summary */}
       {data?.summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg text-xs">
           <div>
@@ -198,7 +197,7 @@ export default function WhatIfLineChart({
                 wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }}
               />
 
-              {/* 动态渲染最多 8 根折线 */}
+              {/* Dynamic rendering */}
               {projections.map((prop, idx) => {
                 const dataKey = `prop_${prop.id || idx}`;
                 const color = LINE_COLORS[idx % LINE_COLORS.length];
