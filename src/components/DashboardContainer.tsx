@@ -7,10 +7,13 @@ import {
   fetchDistanceAggregates,
   fetchYearAggregates,
   fetchMarketProperties,
+  fetchWhatIfAnalysis,
   refreshMarketCache,
   AggregateStats,
   MarketProperty,
   MarketFilterParams,
+  WhatIfResponse,
+  WhatIfQueryParams,
 } from "@/lib/marketApi";
 
 import EstimateForm from "./EstimateForm";
@@ -19,6 +22,7 @@ import PriceChart from "./PriceChart";
 import PropertyComparison from "./PropertyComparison";
 import MarketCharts from "./market/MarketCharts";
 import MarketTableView from "./market/MarketTableView";
+import WhatIfLineChart from "./market/WhatIfLineChart";
 
 export default function DashboardContainer({ initialData }: { initialData: HistoryResponse }) {
   const [activeTab, setActiveTab] = useState<"estimate" | "history" | "compare" | "market">("estimate");
@@ -32,6 +36,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
   const [distanceStats, setDistanceStats] = useState<AggregateStats[]>([]);
   const [yearStats, setYearStats] = useState<AggregateStats[]>([]);
   const [marketProperties, setMarketProperties] = useState<MarketProperty[]>([]);
+  const [whatIfData, setWhatIfData] = useState<WhatIfResponse | null>(null);
   const [marketLoading, setMarketLoading] = useState(false);
 
   // 表单提交后同步最新历史 (Python)，并静默刷新 Java 端 LRU 缓存
@@ -74,20 +79,38 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
   };
 
   // 加载 Java Spring Boot 市场分析数据 (Task 2)
-  const loadMarketData = async (params: MarketFilterParams = { sortBy: "price" }) => {
+  const loadMarketData = async (
+    params: MarketFilterParams = { sortBy: "price" },
+    whatIfParams?: WhatIfQueryParams
+  ) => {
     setMarketLoading(true);
     try {
-      const [distRes, yearRes, propList] = await Promise.all([
+      const [distRes, yearRes, propList, whatIfRes] = await Promise.all([
         fetchDistanceAggregates(),
         fetchYearAggregates(),
         fetchMarketProperties(params),
+        fetchWhatIfAnalysis(whatIfParams),
       ]);
 
       setDistanceStats(distRes.aggregates || []);
       setYearStats(yearRes.aggregates || []);
       setMarketProperties(propList || []);
+      setWhatIfData(whatIfRes);
     } catch (err) {
       console.error("Failed to load data from Java backend:", err);
+    } finally {
+      setMarketLoading(false);
+    }
+  };
+
+  // 仅刷新 What-If 推演参数时调用
+  const handleWhatIfParamChange = async (params: WhatIfQueryParams) => {
+    setMarketLoading(true);
+    try {
+      const res = await fetchWhatIfAnalysis(params);
+      setWhatIfData(res);
+    } catch (err) {
+      console.error("Failed to update What-If analysis:", err);
     } finally {
       setMarketLoading(false);
     }
@@ -119,7 +142,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
         <button
           type="button"
           onClick={() => onTabChange("estimate")}
-          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
+          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${
             activeTab === "estimate"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -131,7 +154,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
         <button
           type="button"
           onClick={() => onTabChange("history")}
-          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
+          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${
             activeTab === "history"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -143,7 +166,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
         <button
           type="button"
           onClick={() => onTabChange("compare")}
-          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
+          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${
             activeTab === "compare"
               ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -155,7 +178,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
         <button
           type="button"
           onClick={() => onTabChange("market")}
-          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition flex items-center gap-1.5 ${
+          className={`py-2 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
             activeTab === "market"
               ? "border-indigo-600 text-indigo-600 font-bold"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -190,7 +213,7 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
                   <button
                     type="button"
                     onClick={() => onTabChange("history")}
-                    className="w-full mt-4 text-xs font-semibold py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded transition"
+                    className="w-full mt-4 text-xs font-semibold py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded transition cursor-pointer"
                   >
                     View in History Table &rarr;
                   </button>
@@ -261,13 +284,20 @@ export default function DashboardContainer({ initialData }: { initialData: Histo
       {/* Tab 4: Market Analysis & Aggregation (Java Spring Boot API) */}
       {activeTab === "market" && (
         <div className="space-y-6">
-          {/* 需求 i: 距离与建成年份聚合图表 */}
+          {/* 需求 iii: 5 年宏观推演折线图 (Top 8 房产预测) */}
+          <WhatIfLineChart
+            data={whatIfData}
+            onParamChange={handleWhatIfParamChange}
+            loading={marketLoading}
+          />
+
+          {/* 需求 i: 距离与建成年份聚合柱状图 */}
           <MarketCharts distanceStats={distanceStats} yearStats={yearStats} />
 
           {/* 需求 ii, iv, v: 过滤器、CSV/PDF 导出与响应式排序表格 */}
           <MarketTableView
             properties={marketProperties}
-            onFilterChange={loadMarketData}
+            onFilterChange={(filterParams) => loadMarketData(filterParams)}
             onRefresh={handleRefreshMarketCache}
             loading={marketLoading}
           />

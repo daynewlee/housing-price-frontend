@@ -47,3 +47,56 @@ export interface HistoryResponse {
   total_pages: number;
   records: PropertyRecord[];
 }
+
+export interface WhatIfPropertyProjection {
+  id: number;
+  propertyName: string;
+  currentPrice: number;
+  projectedPrice: number;
+  projectedGain: number;
+  estimatedMonthlyMortgage: number;
+  squareFootage: number;
+  bedrooms: number;
+}
+
+export interface WhatIfResponse {
+  status: "SUCCESS" | "NO_DATA";
+  scenario: string;
+  sampleSize?: number;
+  macroAssumptions?: {
+    yearsAhead: number;
+    annualInflationRate: string;
+    averageMortgageRate: string;
+    cumulativeGrowthMultiplier: number;
+  };
+  summary?: {
+    avgCurrentPrice: number;
+    avgProjectedPrice: number;
+    overallAppreciationPct: string;
+  };
+  projections?: WhatIfPropertyProjection[];
+  message?: string;
+}
+
+export interface WhatIfQueryParams {
+  scenarioName?: string;
+  yearsAhead?: number;
+  inflationRate?: number;
+  mortgageRate?: number;
+}
+
+export async function fetchWhatIfAnalysis(params?: WhatIfQueryParams): Promise<WhatIfResponse> {
+  const res = await fetch(`${JAVA_API_BASE}/api/market/what-if`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scenario_name: params?.scenarioName || "5-Year Macro Outlook",
+      years_ahead: params?.yearsAhead ?? 5,
+      inflation_rate: params?.inflationRate ?? 3.0,
+      mortgage_rate: params?.mortgageRate ?? 5.5,
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch What-If macro analysis");
+  return res.json();
+}

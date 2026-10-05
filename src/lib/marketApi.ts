@@ -37,6 +37,53 @@ export interface MarketFilterParams {
   sortBy?: string;
 }
 
+// ------------------- What-If payload and api -------------------
+export interface YearlyTrajectoryPoint {
+  year: number;
+  yearOffset: number;
+  price: number;
+}
+
+export interface WhatIfPropertyProjection {
+  id: number;
+  propertyName: string;
+  currentPrice: number;
+  projectedPrice: number;
+  projectedGain: number;
+  estimatedMonthlyMortgage: number;
+  squareFootage: number;
+  bedrooms: number;
+  trajectory?: YearlyTrajectoryPoint[]; // 5 年逐年预测走势点 (2026 ~ 2031)
+}
+
+export interface WhatIfResponse {
+  status: "SUCCESS" | "NO_DATA";
+  scenario: string;
+  sampleSize?: number;
+  macroAssumptions?: {
+    yearsAhead: number;
+    annualInflationRate: string;
+    averageMortgageRate: string;
+    cumulativeGrowthMultiplier: number;
+  };
+  summary?: {
+    avgCurrentPrice: number;
+    avgProjectedPrice: number;
+    overallAppreciationPct: string;
+  };
+  projections?: WhatIfPropertyProjection[];
+  message?: string;
+}
+
+export interface WhatIfQueryParams {
+  scenarioName?: string;
+  yearsAhead?: number;
+  inflationRate?: number;
+  mortgageRate?: number;
+}
+
+// ------------------- API 请求函数 -------------------
+
 export async function fetchDistanceAggregates(): Promise<AggregateResponse> {
   const res = await fetch(`${JAVA_API_BASE}/api/market/aggregate/distance`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch distance aggregates");
@@ -60,6 +107,22 @@ export async function fetchMarketProperties(params: MarketFilterParams): Promise
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Failed to fetch market properties");
+  return res.json();
+}
+
+export async function fetchWhatIfAnalysis(params?: WhatIfQueryParams): Promise<WhatIfResponse> {
+  const res = await fetch(`${JAVA_API_BASE}/api/market/what-if`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scenario_name: params?.scenarioName || "5-Year Macro Outlook",
+      years_ahead: params?.yearsAhead ?? 5,
+      inflation_rate: params?.inflationRate ?? 3.0,
+      mortgage_rate: params?.mortgageRate ?? 5.5,
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch What-If macro analysis");
   return res.json();
 }
 
